@@ -39,18 +39,33 @@ def add_audio_analysis(sp, tracks):
         tracks[i]["audio_analysis"] = results
 
 
-def main(args):
+def load(args):
     sp = client_authorization()
+    print("LOADING TRACKS")
     tracks = get_my_saved_tracks(sp)
 
     if args.audio_features:
+        print("LOADING FEATURES")
         add_audio_features(sp, tracks)
 
     if args.audio_analysis:
+        print("LOADING ANALYSIS")
         add_audio_analysis(sp, tracks)
 
+    return tracks
+
+
+def main(args):
+    tracks = load(args)
     with open("music_data.json", "w", encoding="utf-8") as fp:
         json.dump(tracks, fp, ensure_ascii=False, indent=4)
+
+def load_tracks_features():
+    args = argparse.Namespace()
+    args.audio_features = True
+    args.audio_analysis = False
+    tracks = load(args)
+    return tracks
 
 def parse_args():
     parser = argparse.ArgumentParser()
