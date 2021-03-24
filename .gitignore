@@ -1,3 +1,7 @@
 credentials.sh
 data/
+training_logs/
+.cache
+.idea
+*__pycache__*
 
