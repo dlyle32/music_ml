@@ -86,6 +86,7 @@ def load_track_artists():
 def load_audio_analysis(directory, window_len, step, datacap):
     input_vectors = []
     songs_loaded = 0
+    artists = {}
     for r, d, f in os.walk(directory):
         for fname in f:
             if "music_data" not in fname:
@@ -95,12 +96,14 @@ def load_audio_analysis(directory, window_len, step, datacap):
             with open(os.path.join(r, fname), 'r') as fp:
                 data = json.load(fp)
                 tracks = [(track["id"],track["audio_analysis"]["segments"]) for track in data]
+                new_artists = {track["id"]: track["artists"][0]["name"] for track in tracks}
+                artists.update(new_artists)
                 songs_loaded += len(tracks)
                 segment_vectors = format_sliding_window_input(tracks, window_len, step)
                 input_vectors.extend(segment_vectors)
 
     # inputs = np.array(input_vectors)
-    return input_vectors
+    return input_vectors, artists
 
 
 

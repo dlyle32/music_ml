@@ -242,8 +242,8 @@ def configure_logger(args):
 
 def main(args):
     configure_logger(args)
-    input_vectors = load_audio_analysis(args.datadir, args.seqlength, args.step, args.datacap)
-    track_artist_map = load_track_artists()
+    input_vectors, track_artist_map = load_audio_analysis(args.datadir, args.seqlength, args.step, args.datacap)
+    # track_artist_map = load_track_artists()
     artists = list(set(track_artist_map.values()))
     reverse_artist = {a:i for i,a in enumerate(artists)}
     modelBuilder = AttentionModelBuilder(args)
