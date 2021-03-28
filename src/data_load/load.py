@@ -112,7 +112,7 @@ def format_sliding_window_input(tracks, window_len, step):
     for track_id,seg_list in tracks:
         vects = [format_segments_vectors(seg) for seg in seg_list]
         for i in range(0,len(vects),step):
-            if i + window_len > len(vects):
+            if i + window_len >= len(vects):
                 continue
             seg_vectors.append((track_id,vects[i:i+window_len]))
     return seg_vectors
