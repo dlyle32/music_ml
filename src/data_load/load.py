@@ -96,7 +96,7 @@ def load_audio_analysis(directory, window_len, step, datacap):
             with open(os.path.join(r, fname), 'r') as fp:
                 data = json.load(fp)
                 tracks = [(track["id"],track["audio_analysis"]["segments"]) for track in data]
-                new_artists = {track["id"]: track["artists"][0]["name"] for track in tracks}
+                new_artists = {track["id"]: track["artists"][0]["name"] for track in data}
                 artists.update(new_artists)
                 songs_loaded += len(tracks)
                 segment_vectors = format_sliding_window_input(tracks, window_len, step)
