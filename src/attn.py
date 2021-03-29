@@ -8,7 +8,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.python.ops import special_math_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.keras.layers import einsum_dense
-from tensorflow.keras.callbacks import LambdaCallback
+from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint
 import numpy as np
 import argparse
 from data_load.load import load_audio_analysis, load_track_artists
@@ -126,8 +126,31 @@ class AttentionModelBuilder:
 
         return masked_dataset, y_labels, loss_mask
 
+    def get_input_vectors_for_artist(self, segment_vectors, track_to_artist, reverse_artist, target_artist):
+        # samples, seqlen, vect_dim = segment_vectors.shape
+        pos_tracks = []
+        neg_tracks = []
+        for track_id,seg in segment_vectors:
+            artist = track_to_artist[track_id]
+            if artist == target_artist:
+                pos_tracks.append(seg)
+            else:
+                neg_tracks.append(seg)
+        neg_tracks = neg_tracks[:len(pos_tracks)]
+        pos_out = [1 for track in pos_tracks]
+        neg_out = [0 for track in neg_tracks]
+        pos_tracks.extend(neg_tracks)
+        pos_out.extend(neg_out)
+        X = np.array(pos_tracks)
+        Y = np.array(pos_out)
+        perm = np.random.permutation(X.shape[0])
+        X = X[perm]
+        Y = Y[perm]
+        return X, Y
+
     def get_input_vectors(self, segment_vectors, track_to_artist, reverse_artist):
         # samples, seqlen, vect_dim = segment_vectors.shape
+        return self.get_input_vectors_for_artist(segment_vectors, track_to_artist, reverse_artist, "The Beatles")
         artists_out = []
         for track_id,seg in segment_vectors:
             artists_out.append(reverse_artist[track_to_artist[track_id]])
@@ -223,7 +246,7 @@ class AttentionModelBuilder:
         out = keras.layers.GlobalAveragePooling1D()(encoder_out)
         out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg, name="penult_dense")(out)
 
-        out = keras.layers.Dense(num_artists, activation="softmax", name="final_dense")(out)
+        out = keras.layers.Dense(2, activation="softmax", name="final_dense")(out)
 
         model = keras.Model(inputs=inpt, outputs=out)
         return model
@@ -239,11 +262,20 @@ def configure_logger(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
 
+def configure_checkpointing(args):
+    timestamp = int(time.time())
+    checkpoint_dir = os.path.join(args.volumedir, datetime.datetime.today().strftime('%Y%m%d'), "checkpoints/")
+    if not os.path.isdir(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+    checkpoint_name = "music_model.%d.{epoch:03d}.h5" % timestamp
+    return os.path.join(checkpoint_dir, checkpoint_name)
+
 
 def main(args):
     configure_logger(args)
     datadir = os.path.join(args.volumedir, args.datadir)
     input_vectors, track_artist_map = load_audio_analysis(datadir, args.seqlength, args.step, args.datacap)
+
     # track_artist_map = load_track_artists()
     artists = list(set(track_artist_map.values()))
     reverse_artist = {a:i for i,a in enumerate(artists)}
@@ -255,12 +287,16 @@ def main(args):
     logger.info(model.summary())
     X,Y = modelBuilder.get_input_vectors(input_vectors, track_artist_map, reverse_artist)
     logger_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: logger.info("Epoch %d: %s" % (epoch, str(logs))))
+    checkpointpath = configure_checkpointing(args)
+    checkpoint_callback = ModelCheckpoint(filepath=checkpointpath,
+                                          save_weights_only=False,
+                                          monitor='val_loss')
     history = model.fit(X, Y,
                         epochs=args.numepochs,
                         batch_size=args.minibatchsize,
                         validation_split=0.2,
                         shuffle=True,
-                        callbacks=[logger_callback])
+                        callbacks=[logger_callback, checkpoint_callback])
 
 def parse_args():
     parser = argparse.ArgumentParser()
