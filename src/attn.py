@@ -252,8 +252,8 @@ class AttentionModelBuilder:
         for i in range(self.transformer_layers):
             encoder_out = self.transformer_encoder(encoder_out, i, reg, mask)
         # decoder_out = self.transformer_decoder(encoder_out, target_emb, reg, mask)
-        out = keras.layers.GlobalAveragePooling1D()(encoder_out)
-        out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg, name="penult_dense")(out)
+        # out = keras.layers.GlobalAveragePooling1D()(encoder_out)
+        out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg, name="penult_dense")(encoder_out)
 
         out = keras.layers.Dense(self.input_dim, activation="relu", name="final_dense")(out)
 
@@ -319,9 +319,9 @@ def main(args):
     reverse_artist = {a:i for i,a in enumerate(artists)}
     modelBuilder = AttentionModelBuilder(args)
     model = modelBuilder.create_model(len(artists))
-    model.compile(loss=tf.keras.losses.SparseCategoricalCrossentropy(name="loss"),
+    model.compile(loss=tf.keras.losses.MeanSquaredError(name="loss"),
                   optimizer=Adam(learning_rate=args.learningrate),
-                  metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")])
+                  metrics=["accuracy"])
     logger.info(model.summary())
     X,Y = modelBuilder.get_input_vectors(input_vectors, track_artist_map, reverse_artist)
     logger_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: logger.info("Epoch %d: %s" % (epoch, str(logs))))
