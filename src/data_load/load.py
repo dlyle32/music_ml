@@ -83,6 +83,12 @@ def load_track_artists():
     artists = {track["id"]: track["artists"][0]["name"] for track in tracks }
     return artists
 
+def format_audio_input_for_tracks(tracks, window_len, step):
+    track_pairs = [(track["id"], track["audio_analysis"]["segments"]) for track in tracks]
+    artists = {track["id"]: track["artists"][0]["name"] for track in tracks}
+    segment_vectors = format_sliding_window_input(track_pairs, window_len, step)
+    return segment_vectors, artists
+
 def load_audio_analysis(directory, window_len, step, datacap):
     input_vectors = []
     songs_loaded = 0
