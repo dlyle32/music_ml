@@ -5,13 +5,15 @@ import time
 from tensorflow import keras
 from tensorflow.keras import regularizers
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import load_model
 from tensorflow.python.ops import special_math_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.keras.layers import einsum_dense
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint
 import numpy as np
 import argparse
-from data_load.load import load_audio_analysis, load_track_artists
+from data_load.load import load_audio_analysis, load_track_artists, add_audio_analysis, format_audio_input_for_tracks
+from spotipy_utils import search_track, client_authorization
 
 import logging
 
@@ -95,6 +97,7 @@ class AttentionModelBuilder:
         self.ffdim = args.ffdim
         self.transformer_layers = args.transformer_layers
         self.attention_heads = args.attention_heads
+        self.input_dim = 25
 
     def get_masked_datasets(self, dataset, mask_token_ix, vocab_size, pad_mask=None):
         #     dataset = dataset.to_numpy().reshape((dataset.shape[0],1))
@@ -150,13 +153,20 @@ class AttentionModelBuilder:
 
     def get_input_vectors(self, segment_vectors, track_to_artist, reverse_artist):
         # samples, seqlen, vect_dim = segment_vectors.shape
-        return self.get_input_vectors_for_artist(segment_vectors, track_to_artist, reverse_artist, "The Beatles")
+        # return self.get_input_vectors_for_artist(segment_vectors, track_to_artist, reverse_artist, "The Beatles")
         artists_out = []
+        X = np.zeros((len(segment_vectors),self.seqlen,self.input_dim))
+        Y = np.zeros((len(segment_vectors),self.seqlen,self.input_dim))
+        i = 0
         for track_id,seg in segment_vectors:
             artists_out.append(reverse_artist[track_to_artist[track_id]])
-            # Xseg = np.append(np.zeroes(1,seqlen, vect_dim), Yseg[:-1], axis=0)
-        X = np.array([seg[1] for seg in segment_vectors])
-        Y = np.array(artists_out)
+            Yseg = seg
+            Xseg = np.append(np.zeros((1,self.input_dim)), Yseg[:-1], axis=0)
+            X[i] = Xseg
+            Y[i] = Yseg
+            i += 1
+        # X = np.array([seg[1] for seg in segment_vectors])
+        # Y = np.array(artists_out)
         return X, Y
 
     def transformer_encoder(self, x, i, reg, mask=None):
@@ -224,10 +234,9 @@ class AttentionModelBuilder:
         return x
 
     def create_model(self, num_artists):
-        input_dim = 25
         reg = keras.regularizers.l2(self.reg_factor)
 
-        inpt = keras.layers.Input(shape=(self.seqlen,input_dim), name="input")
+        inpt = keras.layers.Input(shape=(self.seqlen,self.input_dim), name="input")
         # out = keras.layers.Embedding(input_dim, self.n_a, input_length=self.seqlen)(inpt)
         out = keras.layers.Dense(self.n_a)(inpt)
         pos_enc = positional_encoding(self.seqlen, self.n_a)
@@ -246,7 +255,7 @@ class AttentionModelBuilder:
         out = keras.layers.GlobalAveragePooling1D()(encoder_out)
         out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg, name="penult_dense")(out)
 
-        out = keras.layers.Dense(2, activation="softmax", name="final_dense")(out)
+        out = keras.layers.Dense(self.input_dim, activation="relu", name="final_dense")(out)
 
         model = keras.Model(inputs=inpt, outputs=out)
         return model
@@ -270,12 +279,41 @@ def configure_checkpointing(args):
     checkpoint_name = "music_model.%d.{epoch:03d}.h5" % timestamp
     return os.path.join(checkpoint_dir, checkpoint_name)
 
+def loadmodel(modelpath):
+    model = load_model(modelpath, custom_objects={"EinsumOp": EinsumOp})
+    return model
+
+def test_inputs(model, args):
+    sp = client_authorization()
+    testing = True
+    while testing:
+        track = search_track(sp)
+        add_audio_analysis(sp, track)
+        input_vectors, track_to_artist = format_audio_input_for_tracks(track, args.seqlength, args.step)
+        X = [seg for id, seg in input_vectors]
+        X = np.array(X)
+        preds = model.predict(X)
+        avgs = np.mean(preds, axis=0)
+        print(avgs)
+        mins = np.min(preds, axis=0)
+        print(mins)
+        maxs = np.max(preds, axis=0)
+        print(maxs)
+        test_prompt = input("Search again (y/n)?")
+        if test_prompt == "n":
+            testing = False
+
 
 def main(args):
     configure_logger(args)
+
+    if args.loadmodel:
+        model = loadmodel(args.loadmodel)
+        test_inputs(model, args)
+        return
+
     datadir = os.path.join(args.volumedir, args.datadir)
     input_vectors, track_artist_map = load_audio_analysis(datadir, args.seqlength, args.step, args.datacap)
-
     # track_artist_map = load_track_artists()
     artists = list(set(track_artist_map.values()))
     reverse_artist = {a:i for i,a in enumerate(artists)}
