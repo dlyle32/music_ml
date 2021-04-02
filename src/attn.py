@@ -13,7 +13,8 @@ from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint
 import numpy as np
 import argparse
 from data_load.load import load_audio_analysis, load_track_artists, add_audio_analysis, format_audio_input_for_tracks
-from spotipy_utils import search_track, client_authorization
+from spotipy_utils import search_track, client_authorization, get_user_playlists, client_credentials
+import spotipy
 
 import logging
 
@@ -303,8 +304,17 @@ def test_inputs(model, args):
         if test_prompt == "n":
             testing = False
 
+def playlists():
+    sp = client_authorization()
+    user_info = sp.me()
+    print(user_info)
+    cats = sp.categories()
+    get_user_playlists(sp,user_info["id"])
+    return
 
 def main(args):
+    playlists()
+    return
     configure_logger(args)
 
     if args.loadmodel:
