@@ -4,17 +4,7 @@ import spotipy
 import os
 import numpy as np
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
-
-def client_authorization():
-    scope = "user-library-read"
-    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
-    return sp
-
-
-def client_credentials():
-    auth_manager = SpotifyClientCredentials()
-    sp = spotipy.Spotify(auth_manager=auth_manager)
-    return sp
+import spotipy_utils as sp_utils
 
 def get_my_saved_tracks(sp):
     offset = 0
@@ -42,7 +32,7 @@ def add_audio_analysis(sp, tracks):
 
 
 def load(args):
-    sp = client_authorization()
+    sp = sp_utils.client_authorization()
     print("LOADING TRACKS")
     tracks = get_my_saved_tracks(sp)
 
@@ -88,6 +78,23 @@ def format_audio_input_for_tracks(tracks, window_len, step):
     artists = {track["id"]: track["artists"][0]["name"] for track in tracks}
     segment_vectors = format_sliding_window_input(track_pairs, window_len, step)
     return segment_vectors, artists
+
+def load_user_playlists_with_features():
+    sp = sp_utils.client_authorization()
+    user_info = sp.me()
+    playlist_ids = sp_utils.get_user_playlists(sp, user_info["id"])
+    playlist_tracks = {}
+    all_tracks = {}
+    for pl_id,pl_name in playlist_ids:
+        tracks = sp_utils.get_tracks_in_playlist(sp,pl_id)
+        add_audio_features(sp,tracks)
+        for track in tracks:
+            if track["id"] in all_tracks:
+                all_tracks[track["id"]]["playlists"].append(pl_id)
+            else:
+                track["playlists"] = [pl_id]
+                all_tracks[track["id"]] = track
+    return all_tracks.values(), playlist_ids
 
 def load_audio_analysis(directory, window_len, step, datacap):
     input_vectors = []

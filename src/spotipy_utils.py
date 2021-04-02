@@ -4,7 +4,7 @@ from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 ## Largely pulled from https://github.com/markkohdev/spotify-api-starter/
 
 def client_authorization():
-    scope = "user-library-read"
+    scope = "user-library-read playlist-read-private playlist-read-collaborative"
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
     return sp
 
@@ -12,6 +12,36 @@ def client_credentials():
     auth_manager = SpotifyClientCredentials()
     sp = spotipy.Spotify(auth_manager=auth_manager)
     return sp
+
+def get_tracks_in_playlist(sp, playlist_id):
+    fields ="tracks(items(track(name,id)),next)"
+    results = sp.playlist(playlist_id, market="US", fields=fields)
+    tracks = []
+    results = results['tracks']
+    while results:
+        for track in results['items']:
+            if track["track"]["id"]:
+                tracks.append(track["track"])
+        if results["next"]:
+            results = sp.next(results)
+        else:
+            results = None
+    return tracks
+
+def get_user_playlists(sp, user_id):
+    playlists = sp.user_playlists(user_id)
+    i = 0
+    ids = []
+    while playlists:
+        for playlist in playlists['items']:
+            if playlist['owner']['id'] == user_id:
+                ids.append((playlist['id'], playlist["name"]))
+                i+=1
+        if playlists['next']:
+            playlists = sp.next(playlists)
+        else:
+            playlists = None
+    return ids
 
 def search_track(spotify):
     """
